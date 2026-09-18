@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: silope_chat
+      POSTGRES_USER: silope_chat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U silope_chat -d silope_chat"]
+      interval: 5s
+      retries: 20
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://silope_chat:${POSTGRES_PASSWORD}@db:5432/silope_chat
+      APP_ORIGIN: ${APP_ORIGIN:-https://chat.silope.com}
+      DATA_DIR: /app/data
+      NODE_ENV: production
+      ICE_SERVERS: ${ICE_SERVERS:-[]}
+    volumes:
+      - appdata:/app/data
+    ports:
+      - "127.0.0.1:3000:3000"
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-chat.silope.com}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - app
+volumes:
+  pgdata:
+  appdata:
+  caddydata:
+  caddyconfig:
